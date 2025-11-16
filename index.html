@@ -1,82 +1,16 @@
-<!--<!doctype html> <html lang="en"> <head> <meta charset="utf-8"> <title>Real‑Time Sign Language Detection — Final Project</title> <meta name="viewport" content="width=device-width, initial-scale=1"> <link rel="stylesheet" href="style.css"> </head> <body> <section class="hero"> <div class="container"> <div class="kicker">Department of Computer Science - Final Year Project</div> <div class="title">Real‑Time Sign Language Detection</div> <p class="subtitle"> YOLOv8‑CLS model exported to ONNX and executed with ONNX Runtime (CPU). This repository includes a desktop demo and validation evidence. </p> <div class="cta"> <a id="btn-run" class="btn" href="#">▶ Run Demo</a> <a class="btn ghost" href="SignLangDemo/webcam_onnx_cls.py">View Source</a> <a class="btn ghost" href="SignLangDemo/start_demo.bat">Launcher (.bat)</a> </div> </div> </section> <section class="section"> <div class="container grid two"> <div class="card"> <h3>Project Overview</h3> <p> The system recognizes Indian Sign Language letters and digits from live webcam input. It applies center‑crop, resize to 224×224, RGB normalization, and runs inference via ONNX Runtime. Temporal smoothing and a confidence threshold produce stable labels suitable for classroom demonstration. </p> <div class="kpis"> <div class="kpi"><b>1.00</b><div>Top‑1 Accuracy</div></div> <div class="kpi"><b>1.00</b><div>Top‑5 Accuracy</div></div> <div class="kpi"><b>224</b><div>Input Size</div></div> </div> </div> <div class="card"> <h3>Demo Screenshot</h3> <div class="figure"> <img class="responsive-img" src="assets/screenshot_demo.png" alt="Demo screenshot"> <div class="caption">Desktop demo with label, confidence, and FPS overlay.</div> </div> </div> </div> </section> <section class="section"> <div class="container grid two"> <div class="card"> <h3>Validation Evidence</h3> <p>The confusion matrix is scaled responsively below so it never overwhelms the layout.</p> <div class="figure"> <img class="responsive-img" src="assets/confusion_matrix.png" alt="Confusion Matrix"> <div class="caption">Confusion Matrix (Top‑1 = 1.00, Top‑5 = 1.00)</div> </div> </div> <div class="card"> <h3>Technical Summary</h3> <ul> <li>YOLOv8s‑CLS trained on 35 classes (A–Z, 1–9)</li> <li>Exported to ONNX (portable deployment)</li> <li>ONNX Runtime (CPU) + OpenCV overlay</li> <li>Preprocess: center‑crop → resize → RGB → normalize → NCHW</li> <li>Postprocess: softmax → temporal smoothing → thresholded label</li> </ul> <p class="mono">Jetson (virtual plan): trtexec --onnx=best.onnx --saveEngine=best.engine --fp16</p> </div> </div> </section> <footer class="footer"> <div class="container">© 2025 Your Name - Final Year Project</div> </footer> <div id="run-modal" class="modal" role="dialog" aria-modal="true"> <div class="dialog"> <h3>Run the Desktop Demo</h3> <p>Choose an option below. If your browser blocks execution, Option 1 opens the demo folder for a quick double‑click; Option 2 calls the launcher directly.</p> <div class="row"> <a class="btn" id="btn-open-folder" href="#">Open Demo Folder</a> <a class="btn" id="btn-run-helper" href="#">Run Demo (Helper)</a> <a class="btn ghost" id="btn-copy-path" href="#">Copy .bat Path</a> <a class="btn ghost" id="btn-close" href="#">Close</a> </div> </div> </div> <script src="app.js"></script> </body> </html>-->
-<!--<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Indian Sign Language — Live Classification</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="wrap">
-        <h1 class="title">Indian Sign Language — Live Classification</h1>
-        <p id="status" class="sub">Status: Idle</p>
-      </div>
-    </header>
-
-    <main class="wrap">
-      <section id="about" class="card">
-        <h2>Overview</h2>
-        <p>
-          This demo classifies hand signs (A–Z, 1–9) from your webcam in real-time using an ONNX model. 
-          Frames are center-cropped, resized to 224, and passed to the model; temporal smoothing provides stable results.
-        </p>
-      </section>
-
-      <section id="demo" class="card demo">
-        <div class="demo-header">
-          <h2>Live Demo</h2>
-          <div class="pill" id="demoPill">Inactive</div>
-        </div>
-
-        <div class="controls">
-          <button id="runBtn" class="btn primary">Run Demo</button>
-          <button id="stopBtn" class="btn">Stop Demo</button>
-        </div>
-
-        <div class="grid">
-          <div class="info">
-            <p>Predicted: <span id="pred">—</span></p>
-            <p>Confidence: <span id="conf">—</span></p>
-            <p>FPS: <span id="fps">—</span></p>
-          </div>
-          <div class="note">
-            The Python window will open separately. Press ‘q’ in that window to quit the camera stream.
-          </div>
-        </div>
-      </section>
-
-      <section id="setup" class="card">
-        <h2>Local Setup</h2>
-        <ul class="steps">
-          <li>Keep index.html, style.css, app.js, start_demo.bat and the weights folder in the same SignLangDemoSite directory.</li>
-          <li>Edit start_demo.bat if your Python path or virtual environment is different.</li>
-          <li>Allow the browser to open the batch file if prompted.</li>
-        </ul>
-      </section>
-    </main>
-
-    <footer class="wrap footer">
-      <small>© 2025 SignLangDemo</small>
-    </footer>
-
-    <script src="app.js"></script>
-  </body>
-</html>-->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sign Language Demo — Browser Inference</title>
+  <title>Sign Language Demo — Cloud API</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- ONNX Runtime Web (WASM) -->
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <!-- ONNX Runtime Web (optional, for local mode demos). Keep commented to prevent OOM. -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script> -->
 </head>
 <body>
   <header class="topbar">
-    <h1>Sign Language Classification (ONNX in Browser)</h1>
+    <h1>Sign Language Classification (API)</h1>
   </header>
 
   <main class="container">
@@ -84,7 +18,8 @@
       <div class="card" id="cameraCard">
         <div class="card-head">
           <h3>Webcam</h3>
-          <span id="status" class="pill off">Idle</span>
+          <!-- Title shows current mode; app_web.js sets it -->
+          <span id="status" class="pill off" title="Mode: API">Idle</span>
         </div>
         <div class="cam">
           <video id="video" autoplay muted playsinline></video>
@@ -93,8 +28,9 @@
           <button id="runBtn">Run Demo</button>
           <button id="stopBtn" class="ghost">Stop</button>
         </div>
-        
-        <p class="note">Give camera permission when prompted. All inference runs locally in your browser — no server required.</p>
+        <p class="note">
+          Frames are resized to 160×160 and sent to a secure API every ~300 ms. No video is stored.
+        </p>
       </div>
     </section>
 
@@ -104,79 +40,41 @@
         <div class="stats">
           <div class="stat">
             <span class="k">Prediction</span>
-            <span id="pred" class="v"></span>
+            <span id="pred" class="v">—</span>
           </div>
           <div class="stat">
             <span class="k">Confidence</span>
-            <span id="conf" class="v"></span>
+            <span id="conf" class="v">—</span>
           </div>
           <div class="stat">
             <span class="k">FPS</span>
-            <span id="fps" class="v"></span>
+            <span id="fps" class="v">—</span>
           </div>
         </div>
       </div>
-      
+
       <div class="card">
         <div class="card-head"><h3>Session Summary</h3></div>
         <div id="summary" class="summary">
           <p class="muted">Start the demo to see a live summary here.</p>
         </div>
       </div>
-      
-
-      <div class="card">
-        <div class="card-head"><h3>About</h3></div>
-        <p>This demo uses onnxruntime‑web (WASM) to run an ONNX classification model entirely in the browser with selfie‑view mirroring and probability smoothing.</p>
-      </div>
 
       <div class="card">
         <div class="card-head"><h3>How it works</h3></div>
         <div class="explain">
-          <p>This demo runs a compact ONNX classification model directly in your browser. It reads webcam frames, centers the hand, mirrors for a selfie view, resizes to 224×224, converts to RGB, and feeds it to the model. The output is a probability over classes, smoothed across recent frames for stable predictions.</p>
+          <p>This page captures 160×160 JPEG snapshots and posts them to a FastAPI + ONNX Runtime server, which returns a label and confidence. For capable devices, a pure browser ONNX mode is also available by enabling the script tag and opening with ?mode=local.</p>
           <ul class="bullets">
-            <li>On‑device inference with onnxruntime‑web (no install, no upload).</li>
-            <li>Temporal smoothing window of 15 frames to reduce flicker.</li>
-            <li>Low‑confidence highlighting below 0.70 to indicate uncertainty.</li>
+            <li>API inference by default to avoid memory crashes.</li>
+            <li>Local ONNX demo optional via URL switch.</li>
+            <li>No frames are stored on the server.</li>
           </ul>
         </div>
       </div>
-      
-      <div class="card">
-        <div class="card-head"><h3>How to sign</h3></div>
-        <div class="explain">
-          <ul class="bullets">
-            <li>Keep your hand inside the frame with good light on the palm.</li>
-            <li>Hold each sign steady for 1–2 seconds for stable confidence.</li>
-            <li>Avoid busy backgrounds; use a plain wall if possible.</li>
-          </ul>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-head"><h3>FAQ</h3></div>
-        <div class="faq">
-          <p><strong>Does my video get uploaded?</strong><br/>No. All processing happens in your browser using WebAssembly.</p>
-          <p><strong>Why is prediction sometimes wrong?</strong><br/>Poor lighting or hands partially out of frame can reduce confidence. Try moving closer and increasing light.</p>
-          <p><strong>Which classes are supported?</strong><br/>Digits 1–9 and letters A–Z with a custom training order. See README for the full list.</p>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-head"><h3>Why in‑browser?</h3></div>
-        <div class="explain">
-          <ul class="bullets">
-            <li>Privacy: frames never leave your device.</li>
-            <li>Zero setup: just allow camera and start.</li>
-            <li>Portability: works on laptop and Android Chrome.</li>
-          </ul>
-        </div>
-      </div>
-      
     </section>
   </main>
 
-  <script src="app_web.js"></script>
+  <!-- Force cache bust with version param when updating JS -->
+  <script src="app_web.js?v=4"></script>
 </body>
 </html>
-
