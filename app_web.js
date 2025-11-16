@@ -2,10 +2,10 @@
 
 // ------------------ Configuration ------------------
 const LABELS = "Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2".split(',');
-let   SIZE = 224;               // try 160 on low-RAM devices
+let   SIZE = 160;               // try 160 on low-RAM devices
 const MIRROR = true;            // selfie view
-let   INTERVAL_MS = 250;        // ~4 Hz; increase to 300 if device struggles
-const SMOOTH = 15;              // temporal smoothing window
+let   INTERVAL_MS = 300;        // ~4 Hz; increase to 300 if device struggles
+const SMOOTH = 10;              // temporal smoothing window
 const WARN_THRESH = 0.70;       // low-confidence color cue
 
 // ------------------ UI Elements --------------------
@@ -68,7 +68,8 @@ async function initCamera() {
 }
 async function initSession() {
   // ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-  session = await ort.InferenceSession.create("weights/best.onnx");
+  const EP = [{ name: 'webgl' }, { name: 'wasm' }];
+  session = await ort.InferenceSession.create("weights/best.onnx", { executionProviders: EP });
   inputName = session.inputNames[0];
 }
 function prepareCanvas() {
