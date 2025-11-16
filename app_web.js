@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // app_web.js — Hybrid (Local ONNX + API fallback), hardened for API mode
 
 // ------------------ Endpoints & Modes ------------------
@@ -7,13 +8,32 @@ function shouldUseAPI() {
   const urlMode = new URLSearchParams(location.search).get("mode");
   if (urlMode === "api") return true;
   if (urlMode === "local") return false;
+=======
+const API_URL = "https://signlang-demo.onrender.com/predict";
+
+function shouldUseAPI() {
+  // Use API if:
+  // - device has very low memory, or
+  // - WebGL not available for ORT, or
+  // - user forced fallback via URL ?mode=api
+  const urlMode = new URLSearchParams(location.search).get("mode");
+  if (urlMode === "api") return true;
+>>>>>>> e572d89 (api)
   try {
     if (navigator.deviceMemory && navigator.deviceMemory < 4) return true;
   } catch(_) {}
   const gl = document.createElement('canvas').getContext('webgl');
+<<<<<<< HEAD
   return !gl; // if no WebGL, prefer API
 }
 let USE_API = shouldUseAPI();
+=======
+  const webglOK = !!gl;
+  return !webglOK; // no GPU → use API
+}
+let USE_API = shouldUseAPI();
+// app_web.js — Browser-only ONNX inference (optimized + polished)
+>>>>>>> e572d89 (api)
 
 // ------------------ Configuration ------------------
 const LABELS = "Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2".split(',');
