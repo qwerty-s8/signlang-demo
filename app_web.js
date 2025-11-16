@@ -1,33 +1,36 @@
-// app_web.js — Browser-only ONNX inference (refined)
+// app_web.js — Browser-only ONNX inference (optimized + polished)
 
 // ------------------ Configuration ------------------
 const LABELS = "Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2".split(',');
-const SIZE = 224;
-const MIRROR = true;           // selfie view
-const INTERVAL_MS = 250;       // ~4 Hz
-const SMOOTH = 15;             // temporal smoothing window
-const WARN_THRESH = 0.70;      // low-confidence color cue
+let   SIZE = 224;               // try 160 on low-RAM devices
+const MIRROR = true;            // selfie view
+let   INTERVAL_MS = 250;        // ~4 Hz; increase to 300 if device struggles
+const SMOOTH = 15;              // temporal smoothing window
+const WARN_THRESH = 0.70;       // low-confidence color cue
 
 // ------------------ UI Elements --------------------
-const statusEl = document.getElementById('status');
-const video    = document.getElementById('video');
-const runBtn   = document.getElementById('runBtn');
-const stopBtn  = document.getElementById('stopBtn');
-const predEl   = document.getElementById('pred');
-const confEl   = document.getElementById('conf');
-const fpsEl    = document.getElementById('fps');
-const summaryEl= document.getElementById('summary'); // optional summary card
+const statusEl  = document.getElementById('status');
+const video     = document.getElementById('video');
+const runBtn    = document.getElementById('runBtn');
+const stopBtn   = document.getElementById('stopBtn');
+const predEl    = document.getElementById('pred');
+const confEl    = document.getElementById('conf');
+const fpsEl     = document.getElementById('fps');
+const summaryEl = document.getElementById('summary'); // optional summary card
 
 // ------------------ State --------------------------
 let running = false;
-let timer   = null;
 let session = null;
 let inputName = null;
 
-// Offscreen canvas for preprocessing
+// Offscreen canvas for preprocessing (single instance)
 const canvas = document.createElement('canvas');
-canvas.width = SIZE; canvas.height = SIZE;
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
+let   ctx = null;
+
+// Pre-allocated input buffer/tensor (resized when SIZE changes)
+let H = SIZE, W = SIZE, C = 3;
+let inBuf = new Float32Array(1 * C * H * W);
+let inTensor = new ort.Tensor("float32", inBuf, [1, C, H, W]);
 
 // FPS (EMA) + smoothing + session metrics
 let fpsEMA = 0.0, tPrev = performance.now();
@@ -40,14 +43,12 @@ function setStatus(txt, on=false) {
   statusEl.classList.toggle('on', on);
   statusEl.classList.toggle('off', !on);
 }
-
 function colorByConf(v) {
   const low = v < WARN_THRESH;
   const c = low ? '#f4bf4f' : '#e9ecf1';
   predEl.style.color = c;
   confEl.style.color = c;
 }
-
 function resetSessionMetrics() {
   fpsEMA = 0.0; tPrev = performance.now();
   smoothQ.length = 0;
@@ -65,53 +66,54 @@ async function initCamera() {
   video.srcObject = stream;
   await video.play();
 }
-
 async function initSession() {
-  // Optional: set WASM path to explicit CDN
   // ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
   session = await ort.InferenceSession.create("weights/best.onnx");
   inputName = session.inputNames[0];
 }
+function prepareCanvas() {
+  canvas.width = SIZE; canvas.height = SIZE;
+  ctx = canvas.getContext('2d', { willReadFrequently: true });
+  // renew buffers for new SIZE if needed
+  H = SIZE; W = SIZE;
+  inBuf = new Float32Array(1 * C * H * W);
+  inTensor = new ort.Tensor("float32", inBuf, [1, C, H, W]);
+}
 
 // ------------------ Preprocess ---------------------
 function preprocessToNCHW() {
-  // Draw with mirror for selfie
   if (MIRROR) {
-    ctx.save();
-    ctx.translate(SIZE, 0); ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, SIZE, SIZE);
-    ctx.restore();
+    ctx.save(); ctx.translate(SIZE, 0); ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, SIZE, SIZE); ctx.restore();
   } else {
     ctx.drawImage(video, 0, 0, SIZE, SIZE);
   }
-
-  // HWC RGBA -> NCHW RGB, normalized 0..1
-  const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
-  const H = SIZE, W = SIZE;
-  const out = new Float32Array(1 * 3 * H * W);
+  const data = ctx.getImageData(0, 0, SIZE, SIZE).data; // RGBA
   let p = 0, rIdx = 0, gIdx = H*W, bIdx = 2*H*W;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
-      out[rIdx + p] = data[i]   / 255;
-      out[gIdx + p] = data[i+1] / 255;
-      out[bIdx + p] = data[i+2] / 255;
+      inBuf[rIdx + p] = data[i]   / 255;
+      inBuf[gIdx + p] = data[i+1] / 255;
+      inBuf[bIdx + p] = data[i+2] / 255;
       p++;
     }
   }
-  return new ort.Tensor("float32", out, [1, 3, H, W]);
+  return inTensor; // reuse tensor object
 }
 
 // ------------------ Math helpers -------------------
 function softmax(logits) {
-  let m = -Infinity;
-  for (let v of logits) if (v > m) m = v;
+  let m = -Infinity; for (let v of logits) if (v > m) m = v;
   const exps = logits.map(v => Math.exp(v - m));
   const s = exps.reduce((a,b)=>a+b, 0);
   return exps.map(v => v / s);
 }
 function pushProb(vec) {
-  smoothQ.push(vec);
+  // store a compact copy to avoid holding onto large buffers
+  const copy = new Float32Array(vec.length);
+  copy.set(vec);
+  smoothQ.push(copy);
   if (smoothQ.length > SMOOTH) smoothQ.shift();
 }
 function avgProb() {
@@ -127,41 +129,38 @@ function trackLabel(lbl) { labelHist.set(lbl, (labelHist.get(lbl)||0) + 1); }
 
 // ------------------ Inference step -----------------
 async function step() {
-  try {
-    const tensor = preprocessToNCHW();
-    const out = await session.run({ [inputName]: tensor });
-    const outName = session.outputNames[0];
-    const logits = Array.from(out[outName].data);
-    const probs = (logits.every(v => v>=0 && v<=1) && Math.abs(logits.reduce((a,b)=>a+b,0)-1)<1e-3)
-      ? logits : softmax(logits);
+  const tensor = preprocessToNCHW();
+  const out = await session.run({ [inputName]: tensor });
+  const outName = session.outputNames[0];
 
-    pushProb(Float32Array.from(probs));
-    const avg = avgProb() || Float32Array.from(probs);
+  // Avoid Array.from for big outputs; read as typed array directly
+  const raw = out[outName].data;
+  const logits = (raw instanceof Float32Array || raw instanceof Float64Array) ? raw : Float32Array.from(raw);
+  const probs = (Array.prototype.every.call(logits, v => v>=0 && v<=1) &&
+                 Math.abs(logits.reduce((a,b)=>a+b,0)-1) < 1e-3)
+               ? logits
+               : softmax(Array.from(logits));
 
-    // Top-1
-    let top = 0; for (let i=1;i<avg.length;i++) if (avg[i] > avg[top]) top = i;
-    const label = LABELS[top] || '?';
-    const conf  = avg[top];
+  pushProb(probs);
+  const avg = avgProb() || probs;
 
-    // UI
-    predEl.textContent = label;
-    confEl.textContent = conf.toFixed(2);
-    colorByConf(conf);
+  let top = 0; for (let i=1;i<avg.length;i++) if (avg[i] > avg[top]) top = i;
+  const label = LABELS[top] || '?';
+  const conf  = avg[top];
 
-    // FPS
-    const tNow = performance.now();
-    const dt = Math.max(1e-3, (tNow - tPrev)/1000);
-    tPrev = tNow;
-    fpsEMA = 0.9*fpsEMA + 0.1*(1.0/dt);
-    fpsEl.textContent = fpsEMA.toFixed(1);
+  // UI
+  predEl.textContent = label;
+  confEl.textContent = conf.toFixed(2);
+  colorByConf(conf);
 
-    // Metrics
-    frameCount++;
-    trackLabel(label);
-  } catch (e) {
-    // Non-fatal: show a transient status but keep loop running
-    console.warn('step error:', e);
-  }
+  // FPS
+  const tNow = performance.now();
+  const dt = Math.max(1e-3, (tNow - tPrev)/1000); tPrev = tNow;
+  fpsEMA = 0.9*fpsEMA + 0.1*(1.0/dt);
+  fpsEl.textContent = fpsEMA.toFixed(1);
+
+  // Metrics
+  frameCount++; trackLabel(label);
 }
 
 // ------------------ Session summary ----------------
@@ -169,46 +168,62 @@ function renderSummary() {
   let total = 0, topLabel = '—', topCount = 0;
   for (const [,cnt] of labelHist) total += cnt;
   for (const [k,c] of labelHist) if (c > topCount) { topCount = c; topLabel = k; }
-
   const share = total ? ((topCount/total)*100).toFixed(1) + '%' : '—';
-  const avgFps = fpsEl.textContent || '—';
-  const lastConf = confEl.textContent || '—';
-
   const html = `
     <p><span class="badge ok">Session complete</span></p>
     <p><strong>Frames:</strong> ${frameCount}</p>
-    <p><strong>Avg FPS (EMA):</strong> ${avgFps}</p>
+    <p><strong>Avg FPS (EMA):</strong> ${fpsEl.textContent || '—'}</p>
     <p><strong>Top class:</strong> ${topLabel} <span class="muted">(${share} of frames)</span></p>
-    <p><strong>Last confidence:</strong> ${lastConf}</p>
+    <p><strong>Last confidence:</strong> ${confEl.textContent || '—'}</p>
   `;
   if (summaryEl) summaryEl.innerHTML = html;
+  console.log(`[SUMMARY] frames=${frameCount} avg_fps=${fpsEl.textContent} top=${topLabel} share=${share} last_conf=${confEl.textContent}`);
+}
 
-  console.log(`[SUMMARY] frames=${frameCount} avg_fps=${avgFps} top=${topLabel} share=${share} last_conf=${lastConf}`);
+// ------------------ Controlled loop (no piling) ----
+async function loop() {
+  while (running) {
+    const t0 = performance.now();
+    try { await step(); }
+    catch (e) { console.warn('step error:', e); }
+    const elapsed = performance.now() - t0;
+    const wait = Math.max(0, INTERVAL_MS - elapsed);
+    await new Promise(r => setTimeout(r, wait));
+  }
 }
 
 // ------------------ Controls -----------------------
 async function start() {
   if (running) return;
-  setStatus('Starting…', true);
+  setStatus('Loading model…', true);
   try {
     if (!video.srcObject) await initCamera();
     if (!session) await initSession();
+    if (!ctx || canvas.width !== SIZE) prepareCanvas();
   } catch (e) {
     setStatus('Camera/Model error', false);
     console.error(e);
     return;
   }
 
+  // Auto‑downshift for low‑RAM devices on first run if crash was observed
+  try {
+    // heuristic: if device has < 4GB RAM, prefer smaller SIZE/interval
+    // navigator.deviceMemory is not supported everywhere
+    if (navigator.deviceMemory && navigator.deviceMemory < 4) {
+      SIZE = 160; INTERVAL_MS = 300; prepareCanvas();
+    }
+  } catch (_) {}
+
   resetSessionMetrics();
   running = true;
   setStatus('Running', true);
-  timer = setInterval(step, INTERVAL_MS);
+  loop();
 }
 
 function stop() {
   if (!running) return;
   running = false;
-  if (timer) { clearInterval(timer); timer = null; }
   setStatus('Idle', false);
   renderSummary();
 }
