@@ -404,20 +404,18 @@ async function initCamera() {
 
 // ------------- Networking ---------
 async function sendFrameJSON() {
-  if (!video.videoWidth) throw new Error('video not ready');
   cxSend.drawImage(video, 0, 0, SEND_SIZE, SEND_SIZE);
-  const dataUrl = cSend.toDataURL('image/jpeg', 0.7);
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: dataUrl })
-  });
+  const blob = await new Promise(r => cSend.toBlob(r, 'image/jpeg', 0.7));
+  const fd = new FormData();
+  fd.append('file', blob, 'frame.jpg'); // field name must match backend parameter
+  const res = await fetch(API_URL, { method:'POST', body: fd });
   if (!res.ok) {
-    const txt = await res.text().catch(()=> String(res.status));
+    const txt = await res.text().catch(()=>res.status);
     throw new Error(`API ${res.status}: ${txt}`);
   }
   return res.json();
 }
+
 
 // ------------- Main loop ----------
 async function loopAPI() {
@@ -425,29 +423,33 @@ async function loopAPI() {
     const t0 = performance.now();
     try {
       const r = await sendFrameJSON();
-      if (r && r.ok) {
-        const label = r.label ?? '—';
-        const conf  = Number(r.conf ?? 0);
-        predEl.textContent = label;
-        confEl.textContent = conf.toFixed(2);
+      console.debug('predict response:', r); // temporary
+      // flexible key mapping
+      const ok    = (r.ok === true) || (r.success === true) || (typeof r.label !== 'undefined') || (typeof r.pred !== 'undefined');
+      if (ok) {
+        const label = (r.label ?? r.pred ?? r.class ?? '—');
+        const conf  = Number(r.conf ?? r.score ?? r.prob ?? r.probability ?? 0);
+        predEl.textContent = String(label);
+        confEl.textContent = isFinite(conf) ? conf.toFixed(2) : '—';
         colorByConf(conf);
-        frameCount++; labelHist.set(label, (labelHist.get(label)||0)+1);
+        frameCount++;
+        labelHist.set(String(label), (labelHist.get(String(label))||0)+1);
       } else {
-        console.warn('Unexpected API response:', r);
+        console.warn('Unexpected API response shape');
       }
     } catch (e) {
       console.warn('API error:', e.message || e);
     }
-
+    // FPS
     const tNow = performance.now();
     const dt = Math.max(1e-3, (tNow - tPrev)/1000); tPrev = tNow;
     fpsEMA = 0.9*fpsEMA + 0.1*(1.0/dt);
     fpsEl.textContent = fpsEMA.toFixed(1);
-
     const elapsed = performance.now() - t0;
     await new Promise(r => setTimeout(r, Math.max(0, SEND_MS - elapsed)));
   }
 }
+
 
 // ------------- Summary ------------
 function renderSummary() {
