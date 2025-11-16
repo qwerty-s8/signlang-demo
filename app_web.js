@@ -1,12 +1,31 @@
-// app_web.js — Browser-only ONNX inference (optimized + polished)
+// app_web.js — Hybrid (Local ONNX + API fallback), polished and stable
+
+// ------------------ Endpoints & Modes ------------------
+const API_URL = "https://signlang-demo.onrender.com/predict"; // change if needed
+
+function shouldUseAPI() {
+  const urlMode = new URLSearchParams(location.search).get("mode");
+  if (urlMode === "api") return true;
+  if (urlMode === "local") return false;
+  try {
+    if (navigator.deviceMemory && navigator.deviceMemory < 4) return true;
+  } catch(_) {}
+  const gl = document.createElement('canvas').getContext('webgl');
+  return !gl; // if no WebGL, prefer API
+}
+let USE_API = shouldUseAPI();
 
 // ------------------ Configuration ------------------
 const LABELS = "Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2".split(',');
-let   SIZE = 160;               // try 160 on low-RAM devices
+let   SIZE = 160;               // 160 default (safer for RAM)
 const MIRROR = true;            // selfie view
-let   INTERVAL_MS = 300;        // ~4 Hz; increase to 300 if device struggles
-const SMOOTH = 10;              // temporal smoothing window
-const WARN_THRESH = 0.70;       // low-confidence color cue
+let   INTERVAL_MS = 300;        // local loop cadence
+const SMOOTH = 10;              // temporal smoothing frames
+const WARN_THRESH = 0.70;       // UI color cue
+
+// API sending config
+const SEND_SIZE = 160;
+const SEND_MS   = 300;
 
 // ------------------ UI Elements --------------------
 const statusEl  = document.getElementById('status');
@@ -16,35 +35,38 @@ const stopBtn   = document.getElementById('stopBtn');
 const predEl    = document.getElementById('pred');
 const confEl    = document.getElementById('conf');
 const fpsEl     = document.getElementById('fps');
-const summaryEl = document.getElementById('summary'); // optional summary card
+const summaryEl = document.getElementById('summary');
 
 // ------------------ State --------------------------
 let running = false;
 let session = null;
 let inputName = null;
 
-// Offscreen canvas for preprocessing (single instance)
 const canvas = document.createElement('canvas');
 let   ctx = null;
 
-// Pre-allocated input buffer/tensor (resized when SIZE changes)
 let H = SIZE, W = SIZE, C = 3;
 let inBuf = new Float32Array(1 * C * H * W);
-let inTensor = new ort.Tensor("float32", inBuf, [1, C, H, W]);
+let inTensor = null; // lazily created when ort is available
 
-// FPS (EMA) + smoothing + session metrics
 let fpsEMA = 0.0, tPrev = performance.now();
 const smoothQ = [];
 let frameCount = 0;
 const labelHist = new Map();
 
+// API capture canvas
+const cSend = document.createElement('canvas');
+cSend.width = SEND_SIZE; cSend.height = SEND_SIZE;
+const cxSend = cSend.getContext('2d', { willReadFrequently: true });
+
+// ------------------ Helpers ------------------------
 function setStatus(txt, on=false) {
   statusEl.textContent = txt;
   statusEl.classList.toggle('on', on);
   statusEl.classList.toggle('off', !on);
 }
 function colorByConf(v) {
-  const low = v < WARN_THRESH;
+  const low = Number(v) < WARN_THRESH;
   const c = low ? '#f4bf4f' : '#e9ecf1';
   predEl.style.color = c;
   confEl.style.color = c;
@@ -57,31 +79,78 @@ function resetSessionMetrics() {
   predEl.textContent = '—';
   confEl.textContent = '—';
   fpsEl.textContent  = '—';
-  if (summaryEl) summaryEl.innerHTML = '<p class="muted">Running… a summary will appear here when you stop.</p>';
+  if (summaryEl) {
+    summaryEl.innerHTML = '<p class="muted">Running… a summary will appear here when you stop.</p>';
+  }
 }
 
-// ------------------ Camera & Model -----------------
+// ------------------ Camera -------------------------
 async function initCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
   video.srcObject = stream;
   await video.play();
 }
+
+// ------------------ API path -----------------------
+async function sendFrameJSON() {
+  cxSend.drawImage(video, 0, 0, SEND_SIZE, SEND_SIZE);
+  const dataUrl = cSend.toDataURL('image/jpeg', 0.7);
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: dataUrl })
+  });
+  return res.json();
+}
+async function loopAPI() {
+  while (running) {
+    const t0 = performance.now();
+    try {
+      const r = await sendFrameJSON();
+      if (r && r.ok) {
+        const label = r.label ?? '—';
+        const conf  = Number(r.conf ?? 0);
+        predEl.textContent = label;
+        confEl.textContent = conf.toFixed(2);
+        colorByConf(conf);
+        frameCount++;
+        labelHist.set(label, (labelHist.get(label)||0)+1);
+      }
+    } catch (e) {
+      console.warn('API error:', e);
+    }
+
+    const tNow = performance.now();
+    const dt = Math.max(1e-3, (tNow - tPrev)/1000);
+    tPrev = tNow;
+    fpsEMA = 0.9*fpsEMA + 0.1*(1.0/dt);
+    fpsEl.textContent = fpsEMA.toFixed(1);
+
+    const elapsed = performance.now() - t0;
+    await new Promise(r => setTimeout(r, Math.max(0, SEND_MS - elapsed)));
+  }
+}
+
+// ------------------ Local ONNX path ----------------
 async function initSession() {
-  // ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+  // If ort is absent (because tag removed), throw to trigger API fallback
+  if (typeof ort === 'undefined') {
+    throw new Error('onnxruntime-web not loaded');
+  }
   const EP = [{ name: 'webgl' }, { name: 'wasm' }];
   session = await ort.InferenceSession.create("weights/best.onnx", { executionProviders: EP });
   inputName = session.inputNames[0];
+  inTensor = new ort.Tensor("float32", inBuf, [1, C, H, W]);
 }
 function prepareCanvas() {
   canvas.width = SIZE; canvas.height = SIZE;
   ctx = canvas.getContext('2d', { willReadFrequently: true });
-  // renew buffers for new SIZE if needed
   H = SIZE; W = SIZE;
   inBuf = new Float32Array(1 * C * H * W);
-  inTensor = new ort.Tensor("float32", inBuf, [1, C, H, W]);
+  if (typeof ort !== 'undefined') {
+    inTensor = new ort.Tensor("float32", inBuf, [1, C, H, W]);
+  }
 }
-
-// ------------------ Preprocess ---------------------
 function preprocessToNCHW() {
   if (MIRROR) {
     ctx.save(); ctx.translate(SIZE, 0); ctx.scale(-1, 1);
@@ -100,10 +169,8 @@ function preprocessToNCHW() {
       p++;
     }
   }
-  return inTensor; // reuse tensor object
+  return inTensor;
 }
-
-// ------------------ Math helpers -------------------
 function softmax(logits) {
   let m = -Infinity; for (let v of logits) if (v > m) m = v;
   const exps = logits.map(v => Math.exp(v - m));
@@ -111,7 +178,6 @@ function softmax(logits) {
   return exps.map(v => v / s);
 }
 function pushProb(vec) {
-  // store a compact copy to avoid holding onto large buffers
   const copy = new Float32Array(vec.length);
   copy.set(vec);
   smoothQ.push(copy);
@@ -128,13 +194,10 @@ function avgProb() {
 }
 function trackLabel(lbl) { labelHist.set(lbl, (labelHist.get(lbl)||0) + 1); }
 
-// ------------------ Inference step -----------------
 async function step() {
   const tensor = preprocessToNCHW();
   const out = await session.run({ [inputName]: tensor });
   const outName = session.outputNames[0];
-
-  // Avoid Array.from for big outputs; read as typed array directly
   const raw = out[outName].data;
   const logits = (raw instanceof Float32Array || raw instanceof Float64Array) ? raw : Float32Array.from(raw);
   const probs = (Array.prototype.every.call(logits, v => v>=0 && v<=1) &&
@@ -149,22 +212,27 @@ async function step() {
   const label = LABELS[top] || '?';
   const conf  = avg[top];
 
-  // UI
   predEl.textContent = label;
   confEl.textContent = conf.toFixed(2);
   colorByConf(conf);
 
-  // FPS
   const tNow = performance.now();
   const dt = Math.max(1e-3, (tNow - tPrev)/1000); tPrev = tNow;
   fpsEMA = 0.9*fpsEMA + 0.1*(1.0/dt);
   fpsEl.textContent = fpsEMA.toFixed(1);
 
-  // Metrics
   frameCount++; trackLabel(label);
 }
+async function loopLocal() {
+  while (running) {
+    const t0 = performance.now();
+    try { await step(); } catch (e) { console.warn('step error:', e); }
+    const elapsed = performance.now() - t0;
+    await new Promise(r => setTimeout(r, Math.max(0, INTERVAL_MS - elapsed)));
+  }
+}
 
-// ------------------ Session summary ----------------
+// ------------------ Summary ------------------------
 function renderSummary() {
   let total = 0, topLabel = '—', topCount = 0;
   for (const [,cnt] of labelHist) total += cnt;
@@ -181,45 +249,47 @@ function renderSummary() {
   console.log(`[SUMMARY] frames=${frameCount} avg_fps=${fpsEl.textContent} top=${topLabel} share=${share} last_conf=${confEl.textContent}`);
 }
 
-// ------------------ Controlled loop (no piling) ----
-async function loop() {
-  while (running) {
-    const t0 = performance.now();
-    try { await step(); }
-    catch (e) { console.warn('step error:', e); }
-    const elapsed = performance.now() - t0;
-    const wait = Math.max(0, INTERVAL_MS - elapsed);
-    await new Promise(r => setTimeout(r, wait));
-  }
-}
-
 // ------------------ Controls -----------------------
 async function start() {
   if (running) return;
-  setStatus('Loading model…', true);
+  setStatus('Starting…', true);
   try {
     if (!video.srcObject) await initCamera();
-    if (!session) await initSession();
-    if (!ctx || canvas.width !== SIZE) prepareCanvas();
   } catch (e) {
-    setStatus('Camera/Model error', false);
+    setStatus('Camera error', false);
     console.error(e);
     return;
   }
 
-  // Auto‑downshift for low‑RAM devices on first run if crash was observed
+  // Light auto-downshift for very low RAM
   try {
-    // heuristic: if device has < 4GB RAM, prefer smaller SIZE/interval
-    // navigator.deviceMemory is not supported everywhere
     if (navigator.deviceMemory && navigator.deviceMemory < 4) {
       SIZE = 160; INTERVAL_MS = 300; prepareCanvas();
     }
-  } catch (_) {}
+  } catch(_){}
 
   resetSessionMetrics();
   running = true;
-  setStatus('Running', true);
-  loop();
+
+  if (USE_API) {
+    setStatus('Running (API)', true);
+    loopAPI();
+    return;
+  }
+
+  // Try local ONNX; if it fails, fallback to API
+  setStatus('Loading model…', true);
+  try {
+    if (!session) await initSession();
+    if (!ctx || canvas.width !== SIZE) prepareCanvas();
+    setStatus('Running (Local)', true);
+    loopLocal();
+  } catch (e) {
+    console.warn('Local init failed, falling back to API:', e);
+    USE_API = true;
+    setStatus('Running (API fallback)', true);
+    loopAPI();
+  }
 }
 
 function stop() {
