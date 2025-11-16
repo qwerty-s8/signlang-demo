@@ -1,4 +1,4 @@
-// app_web.js — Hybrid (Local ONNX + API fallback), polished and stable
+// app_web.js — Hybrid (Local ONNX + API fallback), hardened for API mode
 
 // ------------------ Endpoints & Modes ------------------
 const API_URL = "https://signlang-demo.onrender.com/predict"; // change if needed
@@ -17,11 +17,11 @@ let USE_API = shouldUseAPI();
 
 // ------------------ Configuration ------------------
 const LABELS = "Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2".split(',');
-let   SIZE = 160;               // 160 default (safer for RAM)
-const MIRROR = true;            // selfie view
-let   INTERVAL_MS = 300;        // local loop cadence
-const SMOOTH = 10;              // temporal smoothing frames
-const WARN_THRESH = 0.70;       // UI color cue
+let   SIZE = 160;
+const MIRROR = true;
+let   INTERVAL_MS = 300;
+const SMOOTH = 10;
+const WARN_THRESH = 0.70;
 
 // API sending config
 const SEND_SIZE = 160;
@@ -37,6 +37,12 @@ const confEl    = document.getElementById('conf');
 const fpsEl     = document.getElementById('fps');
 const summaryEl = document.getElementById('summary');
 
+// Optional: show current mode in status
+function setModeTag() {
+  const tag = USE_API ? 'API' : 'Local';
+  statusEl.setAttribute('title', `Mode: ${tag}`);
+}
+
 // ------------------ State --------------------------
 let running = false;
 let session = null;
@@ -47,7 +53,7 @@ let   ctx = null;
 
 let H = SIZE, W = SIZE, C = 3;
 let inBuf = new Float32Array(1 * C * H * W);
-let inTensor = null; // lazily created when ort is available
+let inTensor = null;
 
 let fpsEMA = 0.0, tPrev = performance.now();
 const smoothQ = [];
@@ -100,8 +106,14 @@ async function sendFrameJSON() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: dataUrl })
   });
+  if (!res.ok) {
+    // Bubble up useful info in console without breaking the loop
+    const txt = await res.text().catch(()=> String(res.status));
+    throw new Error(`API ${res.status}: ${txt}`);
+  }
   return res.json();
 }
+
 async function loopAPI() {
   while (running) {
     const t0 = performance.now();
@@ -115,9 +127,11 @@ async function loopAPI() {
         colorByConf(conf);
         frameCount++;
         labelHist.set(label, (labelHist.get(label)||0)+1);
+      } else {
+        console.warn('Unexpected API response:', r);
       }
     } catch (e) {
-      console.warn('API error:', e);
+      console.warn('API error:', e.message || e);
     }
 
     const tNow = performance.now();
@@ -133,10 +147,7 @@ async function loopAPI() {
 
 // ------------------ Local ONNX path ----------------
 async function initSession() {
-  // If ort is absent (because tag removed), throw to trigger API fallback
-  if (typeof ort === 'undefined') {
-    throw new Error('onnxruntime-web not loaded');
-  }
+  if (typeof ort === 'undefined') throw new Error('onnxruntime-web not loaded');
   const EP = [{ name: 'webgl' }, { name: 'wasm' }];
   session = await ort.InferenceSession.create("weights/best.onnx", { executionProviders: EP });
   inputName = session.inputNames[0];
@@ -223,6 +234,7 @@ async function step() {
 
   frameCount++; trackLabel(label);
 }
+
 async function loopLocal() {
   while (running) {
     const t0 = performance.now();
@@ -252,6 +264,7 @@ function renderSummary() {
 // ------------------ Controls -----------------------
 async function start() {
   if (running) return;
+  setModeTag();
   setStatus('Starting…', true);
   try {
     if (!video.srcObject) await initCamera();
@@ -261,12 +274,12 @@ async function start() {
     return;
   }
 
-  // Light auto-downshift for very low RAM
+  // Light auto-downshift
   try {
     if (navigator.deviceMemory && navigator.deviceMemory < 4) {
       SIZE = 160; INTERVAL_MS = 300; prepareCanvas();
     }
-  } catch(_){}
+  } catch(_) {}
 
   resetSessionMetrics();
   running = true;
