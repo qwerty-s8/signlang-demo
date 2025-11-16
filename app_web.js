@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 // app_web.js — Hybrid (Local ONNX + API fallback), hardened for API mode
 
 // ------------------ Endpoints & Modes ------------------
