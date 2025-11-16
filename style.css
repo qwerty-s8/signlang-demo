@@ -186,6 +186,23 @@ p { margin: 8px 0; color: var(--text); }
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(138,164,255,.18), 0 6px 20px rgba(0,0,0,.25);
 }
+/* Typography refinements */
+h1,h2,h3 { letter-spacing: .2px }
+.k { color: var(--muted); font-size: 12px }
+.v { font-weight: 650; font-size: 22px }
+
+/* Stats grid with better spacing */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px }
+.stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px }
+
+/* Summary panel */
+.summary { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px }
+.summary p { margin: 6px 0 }
+.muted { color: var(--muted) }
+.badge { display: inline-block; padding: 4px 8px; border: 1px solid var(--border); border-radius: 999px; background: #1b2030 }
+.badge.ok { background: rgba(55,193,114,.12); border-color: rgba(55,193,114,.35) }
+.badge.warn { background: rgba(244,191,79,.12); border-color: rgba(244,191,79,.35) }
+.badge.danger { background: rgba(244,109,109,.12); border-color: rgba(244,109,109,.35) }
 
 /* Status pill */
 .pill {

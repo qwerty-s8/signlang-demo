@@ -101,11 +101,28 @@
       <div class="card">
         <div class="card-head"><h3>Live Stats</h3></div>
         <div class="stats">
-          <div><span class="k">Pred</span><span id="pred" class="v">—</span></div>
-          <div><span class="k">Conf</span><span id="conf" class="v">—</span></div>
-          <div><span class="k">FPS</span><span id="fps" class="v">—</span></div>
+          <div class="stat">
+            <span class="k">Prediction</span>
+            <span id="pred" class="v"></span>
+          </div>
+          <div class="stat">
+            <span class="k">Confidence</span>
+            <span id="conf" class="v"></span>
+          </div>
+          <div class="stat">
+            <span class="k">FPS</span>
+            <span id="fps" class="v"></span>
+          </div>
         </div>
       </div>
+      
+      <div class="card">
+        <div class="card-head"><h3>Session Summary</h3></div>
+        <div id="summary" class="summary">
+          <p class="muted">Start the demo to see a live summary here.</p>
+        </div>
+      </div>
+      
 
       <div class="card">
         <div class="card-head"><h3>About</h3></div>
