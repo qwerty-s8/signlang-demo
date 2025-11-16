@@ -93,6 +93,7 @@
           <button id="runBtn">Run Demo</button>
           <button id="stopBtn" class="ghost">Stop</button>
         </div>
+        
         <p class="note">Give camera permission when prompted. All inference runs locally in your browser — no server required.</p>
       </div>
     </section>
@@ -128,6 +129,50 @@
         <div class="card-head"><h3>About</h3></div>
         <p>This demo uses onnxruntime‑web (WASM) to run an ONNX classification model entirely in the browser with selfie‑view mirroring and probability smoothing.</p>
       </div>
+
+      <div class="card">
+        <div class="card-head"><h3>How it works</h3></div>
+        <div class="explain">
+          <p>This demo runs a compact ONNX classification model directly in your browser. It reads webcam frames, centers the hand, mirrors for a selfie view, resizes to 224×224, converts to RGB, and feeds it to the model. The output is a probability over classes, smoothed across recent frames for stable predictions.</p>
+          <ul class="bullets">
+            <li>On‑device inference with onnxruntime‑web (no install, no upload).</li>
+            <li>Temporal smoothing window of 15 frames to reduce flicker.</li>
+            <li>Low‑confidence highlighting below 0.70 to indicate uncertainty.</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-head"><h3>How to sign</h3></div>
+        <div class="explain">
+          <ul class="bullets">
+            <li>Keep your hand inside the frame with good light on the palm.</li>
+            <li>Hold each sign steady for 1–2 seconds for stable confidence.</li>
+            <li>Avoid busy backgrounds; use a plain wall if possible.</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-head"><h3>FAQ</h3></div>
+        <div class="faq">
+          <p><strong>Does my video get uploaded?</strong><br/>No. All processing happens in your browser using WebAssembly.</p>
+          <p><strong>Why is prediction sometimes wrong?</strong><br/>Poor lighting or hands partially out of frame can reduce confidence. Try moving closer and increasing light.</p>
+          <p><strong>Which classes are supported?</strong><br/>Digits 1–9 and letters A–Z with a custom training order. See README for the full list.</p>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-head"><h3>Why in‑browser?</h3></div>
+        <div class="explain">
+          <ul class="bullets">
+            <li>Privacy: frames never leave your device.</li>
+            <li>Zero setup: just allow camera and start.</li>
+            <li>Portability: works on laptop and Android Chrome.</li>
+          </ul>
+        </div>
+      </div>
+      
     </section>
   </main>
 

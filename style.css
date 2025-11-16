@@ -278,3 +278,8 @@ video { width: 100%; height: 100%; object-fit: cover; }
 /* Small helpers */
 .hidden { display: none !important; }
 .center { text-align: center; }
+
+.explain p { color: var(--text); margin: 6px 0 10px }
+.bullets { margin: 0; padding-left: 18px }
+.bullets li { margin: 6px 0; color: var(--muted) }
+.faq p { margin: 10px 0 }
