@@ -1,3 +1,20 @@
+const API_URL = "https://signlang-demo.onrender.com/predict";
+
+function shouldUseAPI() {
+  // Use API if:
+  // - device has very low memory, or
+  // - WebGL not available for ORT, or
+  // - user forced fallback via URL ?mode=api
+  const urlMode = new URLSearchParams(location.search).get("mode");
+  if (urlMode === "api") return true;
+  try {
+    if (navigator.deviceMemory && navigator.deviceMemory < 4) return true;
+  } catch(_) {}
+  const gl = document.createElement('canvas').getContext('webgl');
+  const webglOK = !!gl;
+  return !webglOK; // no GPU → use API
+}
+let USE_API = shouldUseAPI();
 // app_web.js — Browser-only ONNX inference (optimized + polished)
 
 // ------------------ Configuration ------------------
