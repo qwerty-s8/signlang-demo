@@ -1,205 +1,140 @@
-Sign Language Classification Demo (ONNX + Python)
-A local, privacy‑first demo that recognizes hand signs from webcam video using an ONNX classification model. The project provides a clean web UI, a lightweight Python server, and a real‑time ONNX Runtime pipeline for smooth, low‑latency inference.
+Sign Language Classification — Browser UI + FastAPI ONNX
+Real‑time Sign Language classification with a lightweight browser UI and a FastAPI backend powered by ONNX Runtime. The browser captures 160×160 JPEG snapshots and sends them to /predict; the server returns label and confidence.
 
-Demo highlights
-Real‑time webcam inference with temporal smoothing for stable predictions.
+Live demo
+Frontend: [<https://<your-pages-site>/>](https://qwerty-s8.github.io/signlang-demo/)
 
-Clean website to start/stop the demo and view live Pred/Conf/FPS.
+API base: https://signlang-demo.onrender.com
 
-Simple local setup on Windows; no cloud required.
+Mode switches
 
-Table of contents
-Features
+Default: API mode (stable on all devices)
 
-Tech stack
-
-Project structure
-
-Quick start (Windows)
-
-Usage
-
-Configuration
-
-Troubleshooting
-
-Dataset and class order
-
-Performance tips
-
-Roadmap
-
-Contributing
-
-License
-
-Acknowledgments
+Force Local ONNX (optional): add ?mode=local after enabling the ONNX script tag in index.html
 
 Features
-ONNX model inference with ONNX Runtime (CPU).
+Real‑time webcam capture, selfie‑view mirroring.
 
-Webcam capture, preprocessing (crop/pad, mirror, normalization).
+Server‑side ONNX inference with temporal smoothing in UI.
 
-Temporal probability averaging and confidence thresholding for stability.
+Live stats: Prediction, Confidence, EMA‑FPS; session summary on Stop.
 
-Website shows live label, confidence, and FPS via a /stats endpoint.
+Privacy: only downscaled JPEG snapshots are sent; nothing is stored.
 
-Tech stack
-Python: onnxruntime, opencv-python, numpy
+Repo layout
+index.html — UI markup (ONNX tag commented by default)
 
-Frontend: HTML/CSS/JavaScript (vanilla)
+style.css — theme
 
-Local server: Python http.server subclass (custom endpoints)
+app_web.js — browser client (API mode; optional local mode switch)
 
-Project structure
-text
-SignLangDemoSite/
-├─ index.html
-├─ style.css
-├─ app.js
-├─ server.py
-├─ webcam_onnx_cls.py
-├─ weights/
-│  ├─ best.onnx
-│  └─ (optional *.pt for reference, not used at runtime)
-├─ assets/
-│  ├─ screenshot_demo.png
-│  └─ confusion_matrix.png
-├─ latest_stats.json         # written by the app at runtime
-├─ start_demo.bat / .vbs     # optional launch helpers
-├─ launch/                   # optional helpers
-└─ .venv/                    # local virtual env (not committed)
-Quick start (Windows)
-Create and activate a virtual environment:
+backend/
 
-py -m venv .venv
+app_fastapi.py — FastAPI inference service
 
-..venv\Scripts\Activate.ps1
+weights/best.onnx — model weights (server side)
 
-Install dependencies:
+labels.txt — model label order
 
-pip install onnxruntime opencv-python numpy
+requirements.txt — Python deps
 
-Start the local servers:
+How it works
+Browser: getUserMedia → mirror → resize to 160×160 → JPEG → POST /predict every ~300 ms.
 
-Terminal A: python -u server.py
+Server: ONNX Runtime runs best.onnx and returns JSON: { ok, label, conf }.
 
-Terminal B: python -m http.server 8080
+Client UI: color cues for low confidence (< 0.70), smoothing across last N frames.
 
-Open the website:
+Quick start
+Frontend (local)
 
-http://127.0.0.1:8080/index.html
+Open index.html via a static server (VS Code Live Server).
 
-Click Run Demo. A camera window opens; press q to quit.
+Use HTTPS for camera on the web. Hard refresh after changes (Ctrl+F5).
 
-Usage
-Run Demo: Launches the ONNX app in a separate process and starts publishing live stats (Pred/Conf/FPS) to /stats.
+Backend (local)
 
-Stop Demo: Brings UI back to Idle; close the camera window with q.
+python -m venv .venv && .venv/Scripts/activate (Windows)
 
-Live stats: UI shows top label, average confidence, and FPS. Browser console logs [STAT] lines.
+pip install -r backend/requirements.txt
+
+uvicorn backend.app_fastapi:app --host 0.0.0.0 --port 8787
+
+Set API_URL in app_web.js to http://localhost:8787/predict for local testing.
+
+Deploy backend (Render/any cloud)
+
+Place best.onnx at backend/weights/best.onnx or set MODEL_PATH.
+
+Ensure /health returns { "ok": true }.
+
+Configure CORS for your Pages origin or allow all for demo.
+
+API
+Endpoint
+
+POST /predict
+
+Request (multipart/form-data)
+
+file: JPEG image (160×160 recommended)
+
+Response (JSON)
+
+{ "ok": true, "label": "A", "conf": 0.92 }
+
+Example
+
+curl -F "file=@test.jpg" https://signlang-demo.onrender.com/predict
+
+Note
+
+Client maps flexible keys: label|pred and conf|score. Keep labels.txt in sync with training.
 
 Configuration
-Common runtime flags passed to the Python script:
+Client
 
---model .\weights\best.onnx
+API_URL: backend /predict endpoint
 
---imgsz 224
+SEND_SIZE: 160 (input size)
 
---mirror (flip horizontally for selfie view)
+SEND_MS: 300 (send cadence)
 
---smooth 15 (temporal window)
+WARN_THRESH: 0.70 (UI cue)
 
---conf_thresh 0.70
+Server (typical)
 
---pad_square (use padding instead of center crop)
+MODEL_PATH=backend/weights/best.onnx
 
---imagenet_norm (enable only if training used mean/std)
+LABELS=backend/labels.txt
 
---labels "<your EXACT class order>"
+Model
+Input: RGB, normalized, resized to 160×160 (or 224×224 as trained).​
 
-Example custom label order (matches this dataset):
+Labels: digits 1–9 and A–Z (custom order).
 
-"Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2"
+In API mode, inference is always on your server model; the browser doesn’t load weights.
 
-Note: The label sequence must match the training class index order, or predictions will be mapped to wrong names.
+Accuracy
+Validation top‑1: ~92–95% (example; update with your measured results).
+
+Real‑time varies by lighting and background; smoothing stabilizes outputs.
+
+Add confusion matrix and macro‑F1 when you log evaluation.
 
 Troubleshooting
-Button returns 200 but nothing happens: ensure server.py and http.server are both running; check that only one process listens on port 8787; kill stale processes.
+Camera not opening:
 
-/stats returns 501: update server.py so do_GET (inside the handler class) implements the /stats branch, and restart the correct server instance.
+Use HTTPS, allow permission, ensure only one script includes app_web.js.
 
-Wrong predictions: verify label order, turn on --mirror, increase --smooth and --conf_thresh, match preprocessing to training (crop vs pad, RGB, normalization).
+Frames = 0, no predictions:
 
-No camera feed: confirm permissions and only one app accessing the webcam.
+DevTools → Network should show /predict 200s every ~300 ms.
 
-Dataset and class order
-This project trained with folder‑based classification. Training class order follows the alphabetical sort of class folders at training time.
+404/405: wrong route or method; 415/422: send multipart “file”.
 
-Confirm order by listing the train subfolders and copy that exact sequence into --labels.
+Fix CORS on server if blocked.
 
-For this repo, the used order is:
-"Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2"
+“Aw, Snap! Out of Memory”:
 
-Performance tips
-Ensure the hand occupies 40–60% of the frame; use front lighting; keep stable distance.
-
-Use temporal averaging and a higher threshold to reduce flicker.
-
-CPU is sufficient for 224×224; try a smaller imgsz for more FPS on low‑end CPUs.
-
-Roadmap
-Optional browser‑only demo using onnxruntime‑web (WASM), hosted on GitHub Pages.
-
-Optional FastAPI inference API for remote deployment (container/VM).
-
-Add top‑3 label overlay and confusion logging.
-
-Contributing
-Pull requests and issues are welcome.
-
-Open an issue describing a bug or feature.
-
-For contributions, fork the repo, create a feature branch, and open a PR with a clear description and test plan.
-
-License
-Include your chosen license here (e.g., MIT). Add a LICENSE file in the repo root.
-
-Acknowledgments
-ONNX Runtime for fast cross‑platform inference.
-
-Ultralytics YOLOv8 classification pipeline used for model training.
-
-How to include this in your repo
-
-Create README.md in the project root.
-
-Paste this content, then adjust screenshots, the exact labels string, and any custom flags.
-
-Commit and push:
-
-git add README.md
-
-git commit -m "Add professional README"
-
-git push
-
-Optional extras for a polished repo
-
-Badges (Python version, license, stars).
-
-A small GIF or mp4 showing the live demo.
-
-requirements.txt and a minimal .gitignore:
-
-.venv/
-
-pycache/
-
-runs/
-
-latest_stats.json
-
-weights/*.pt (keep .onnx if size permits)
-
-If best.onnx is large, attach it to GitHub Releases and download on first run.
+Keep ONNX script commented; default to API mode.
