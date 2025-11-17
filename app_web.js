@@ -407,18 +407,14 @@ async function initCamera() {
 
 // ------------- Networking ---------
 async function sendFrameJSON() {
+  if (!video.videoWidth) throw new Error('video not ready');
   cxSend.drawImage(video, 0, 0, SEND_SIZE, SEND_SIZE);
   const blob = await new Promise(r => cSend.toBlob(r, 'image/jpeg', 0.7));
   const fd = new FormData();
-<<<<<<< HEAD
   fd.append('file', blob, 'frame.jpg'); // field name must match FastAPI parameter
   const res = await fetch(API_URL, { method: 'POST', body: fd });
-=======
-  fd.append('file', blob, 'frame.jpg'); // field name must match backend parameter
-  const res = await fetch(API_URL, { method:'POST', body: fd });
->>>>>>> 883b02b8cbf699e8987e44652807ecc473538f7a
   if (!res.ok) {
-    const txt = await res.text().catch(()=>res.status);
+    const txt = await res.text().catch(()=> String(res.status));
     throw new Error(`API ${res.status}: ${txt}`);
   }
   return res.json();
@@ -426,37 +422,24 @@ async function sendFrameJSON() {
 
 
 // ------------- Main loop ----------
+// ------------- Main loop ----------
 async function loopAPI() {
   while (running) {
     const t0 = performance.now();
     try {
       const r = await sendFrameJSON();
-<<<<<<< HEAD
       console.debug('predict response:', r); // temporary: verify keys once
-      const ok    = (r.ok === true) || (r.success === true) || ('label' in r) || ('pred' in r);
-=======
-      console.debug('predict response:', r); // temporary
-      // flexible key mapping
-      const ok    = (r.ok === true) || (r.success === true) || (typeof r.label !== 'undefined') || (typeof r.pred !== 'undefined');
->>>>>>> 883b02b8cbf699e8987e44652807ecc473538f7a
+      const ok = (r.ok === true) || (r.success === true) || ('label' in r) || ('pred' in r);
       if (ok) {
         const label = (r.label ?? r.pred ?? r.class ?? '—');
         const conf  = Number(r.conf ?? r.score ?? r.prob ?? r.probability ?? 0);
         predEl.textContent = String(label);
-<<<<<<< HEAD
         confEl.textContent = (isFinite(conf) ? conf.toFixed(2) : '—');
-        colorByConf(conf);
-        frameCount++; labelHist.set(String(label), (labelHist.get(String(label))||0)+1);
-      }else {
-        console.warn('Unexpected API response:', r);
-=======
-        confEl.textContent = isFinite(conf) ? conf.toFixed(2) : '—';
         colorByConf(conf);
         frameCount++;
         labelHist.set(String(label), (labelHist.get(String(label))||0)+1);
       } else {
-        console.warn('Unexpected API response shape');
->>>>>>> 883b02b8cbf699e8987e44652807ecc473538f7a
+        console.warn('Unexpected API response:', r);
       }
     } catch (e) {
       console.warn('API error:', e.message || e);
