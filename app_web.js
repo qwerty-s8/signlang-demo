@@ -397,9 +397,12 @@ function resetMetrics() {
 
 // ------------- Camera -------------
 async function initCamera() {
+  console.log('initCamera: requesting getUserMedia');
   const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  console.log('initCamera: got stream', stream);
   video.srcObject = stream;
-  await video.play();
+  await video.play().catch(e => { console.error('video.play error', e); throw e; });
+  console.log('initCamera: video playing', { w: video.videoWidth, h: video.videoHeight });
 }
 
 // ------------- Networking ---------
@@ -490,7 +493,9 @@ async function start() {
   if (running) return;
   setStatus('Starting…', true);
   try { if (!video.srcObject) await initCamera(); }
-  catch (e) { setStatus('Camera error', false); console.error(e); return; }
+  catch (e) { setStatus('Camera error', false); console.error(e); 
+    alert('Please allow camera access and reload the page.'); 
+    return; }
 
   resetMetrics();
   running = true;
