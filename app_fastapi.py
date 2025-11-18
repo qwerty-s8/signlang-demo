@@ -20,7 +20,7 @@ def debug_labels():
 
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "weights/best.onnx")
-IMG_SIZE   = int(os.environ.get("IMG_SIZE", "160"))
+IMG_SIZE   = int(os.environ.get("IMG_SIZE", "224"))
 LABELS     = os.environ.get("LABELS", "1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z").split(',')
 MIRROR     = os.environ.get("MIRROR", "1") == "1"
 
