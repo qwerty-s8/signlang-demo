@@ -9,7 +9,7 @@ import onnxruntime as ort
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "weights/best.onnx")
 IMG_SIZE   = int(os.environ.get("IMG_SIZE", "224"))
-LABELS     = os.environ.get("LABELS", "Z,Y,X,W,V,U,T,S,R,Q,P,O,N,M,L,K,J,I,H,G,F,E,1,D,C,B,A,9,8,7,6,5,4,3,2").split(',')
+LABELS     = os.environ.get("LABELS", "1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z").split(',')
 MIRROR     = os.environ.get("MIRROR", "1") == "1"
 
 app = FastAPI(title="SignLang ONNX API", version="1.0")
