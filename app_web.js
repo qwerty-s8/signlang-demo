@@ -350,7 +350,7 @@ setStatus('Idle', false);*/
 
 // ------------- Config -------------
 const API_URL   = "https://signlang-demo.onrender.com/predict"; // <-- change if needed
-const SEND_SIZE = 160;
+const SEND_SIZE = 224;
 const SEND_MS   = 300;
 const WARN_THRESH = 0.70;
 
