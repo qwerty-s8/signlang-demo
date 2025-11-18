@@ -17,13 +17,16 @@ def debug_labels():
 
 # ... baaki ka code waise hi rehne dein
 # Load once
-sess = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
 
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "weights/best.onnx")
-IMG_SIZE   = int(os.environ.get("IMG_SIZE", "224"))
+IMG_SIZE   = int(os.environ.get("IMG_SIZE", "160"))
 LABELS     = os.environ.get("LABELS", "1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z").split(',')
 MIRROR     = os.environ.get("MIRROR", "1") == "1"
+
+sess = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
+in_name  = sess.get_inputs()[0].name
+out_name = sess.get_outputs()[0].name
 
 app = FastAPI(title="SignLang ONNX API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
