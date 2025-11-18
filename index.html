@@ -29,7 +29,7 @@
           <button id="stopBtn" class="ghost">Stop</button>
         </div>
         <p class="note">
-          Frames are resized to 160×160 and sent to a secure API every ~300 ms. No video is stored.
+          Frames are resized to 224 x 224 and sent to a secure API every ~300 ms. No video is stored.
         </p>
       </div>
     </section>
@@ -63,7 +63,7 @@
       <div class="card">
         <div class="card-head"><h3>How it works</h3></div>
         <div class="explain">
-          <p>This page captures 160×160 JPEG snapshots and posts them to a FastAPI + ONNX Runtime server, which returns a label and confidence. For capable devices, a pure browser ONNX mode is also available by enabling the script tag and opening with ?mode=local.</p>
+          <p>This page captures 224x224 JPEG snapshots and posts them to a FastAPI + ONNX Runtime server, which returns a label and confidence. For capable devices, a pure browser ONNX mode is also available by enabling the script tag and opening with ?mode=local.</p>
           <ul class="bullets">
             <li>API inference by default to avoid memory crashes.</li>
             <li>Local ONNX demo optional via URL switch.</li>
