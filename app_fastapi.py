@@ -7,6 +7,19 @@ from PIL import Image
 import numpy as np
 import onnxruntime as ort
 
+app = FastAPI(title="SignLang ONNX API", version="1.0")
+app.add_middleware(CORSMiddleware, allow_origins=[""], allow_methods=[""], allow_headers=["*"])
+
+# YAHAN ADD KAREIN
+@app.get("/debug-labels")
+def debug_labels():
+    return {"current_labels": LABELS}
+
+# ... baaki ka code waise hi rehne dein
+# Load once
+sess = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
+
+
 MODEL_PATH = os.environ.get("MODEL_PATH", "weights/best.onnx")
 IMG_SIZE   = int(os.environ.get("IMG_SIZE", "224"))
 LABELS     = os.environ.get("LABELS", "1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z").split(',')
